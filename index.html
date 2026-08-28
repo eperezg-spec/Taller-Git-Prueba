@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Itinerarios - Colombia</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+	<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+	<style>
+		:root { --accent: #1769e0; --ink: #172238; --muted: #637086; --line: #dce4ee; }
+		* { box-sizing: border-box; }
+		html, body { min-height: 100%; margin: 0; background: #f4f7fb; color: var(--ink); }
+		.app { min-height: 100vh; }
+		.sidebar { background: #fff; border-right: 1px solid var(--line); }
+		.brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 800; }
+		.brand-title { font-weight: 800; line-height: 1.15; }
+		.muted { color: var(--muted); }
+		.card { border: 1px solid var(--line); border-radius: 10px; }
+		.form-label { font-weight: 600; font-size: .92rem; }
+		.form-select, .form-control { border-color: #cfd9e5; min-height: 44px; }
+		.form-range { accent-color: var(--accent); }
+		.map-panel { min-height: 100vh; position: relative; background: #eaf6f5; }
+		#map { width: 100%; height: 100vh; min-height: 560px; }
+		.map-label { position: absolute; z-index: 2; left: 20px; top: 18px; padding: 9px 13px; border: 1px solid rgba(23,34,56,.1); border-radius: 8px; background: rgba(255,255,255,.92); box-shadow: 0 4px 14px rgba(23,34,56,.08); font-weight: 700; }
+		.itinerary-item { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #fff; cursor: pointer; }
+		.itinerary-item:hover { border-color: #9db9eb; box-shadow: 0 4px 12px rgba(23,34,56,.08); }
+		.color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; }
+		@media (max-width: 767px) { .sidebar { min-height: auto; border-right: 0; border-bottom: 1px solid var(--line); } .map-panel, #map { min-height: 460px; height: 62vh; } }
+	</style>
+</head>
+<body>
+	<main class="container-fluid app"><div class="row g-0">
+		<aside class="col-lg-4 col-xl-3 sidebar p-4">
+			<header class="d-flex align-items-center gap-3 mb-4"><div class="brand-mark">IT</div><div><div class="brand-title">Itinerarios Colombia</div><div class="muted small">Crea y consulta tus rutas</div></div></header>
+			<section class="card shadow-sm mb-4"><div class="card-body p-4"><h1 class="h5 mb-4">Crear itinerario</h1>
+				<form id="itineraryForm">
+					<div class="mb-3"><label for="departure" class="form-label">Aeropuerto de salida</label><select id="departure" class="form-select" required></select></div>
+					<div class="mb-3"><label for="arrival" class="form-label">Aeropuerto de llegada</label><select id="arrival" class="form-select" required></select></div>
+					<div class="mb-3"><label for="intensity" class="form-label">Intensidad horaria <span id="intensityVal" class="badge text-bg-primary">4 h</span></label><input type="range" id="intensity" class="form-range" min="1" max="24" value="4"><div class="d-flex justify-content-between muted small"><span>1 h</span><span>24 h</span></div><div class="form-text">Controla el grosor de la ruta en el mapa.</div></div>
+					<div class="d-flex gap-2"><button type="submit" class="btn btn-primary flex-grow-1"><i class="bi bi-plus-lg me-1"></i>Agregar ruta</button><button id="clearForm" type="button" class="btn btn-outline-secondary" title="Limpiar formulario"><i class="bi bi-arrow-counterclockwise"></i></button></div>
+				</form>
+			</div></section>
+			<div class="d-flex justify-content-between align-items-center mb-3"><h2 class="h5 mb-0">Mis itinerarios <span id="countBadge" class="badge rounded-pill text-bg-light">0</span></h2><button id="clearAll" type="button" class="btn btn-sm btn-outline-danger" title="Eliminar todas las rutas"><i class="bi bi-trash"></i></button></div>
+			<div id="itinerariesList"><p class="muted small">Aún no tienes rutas. Crea la primera con el formulario.</p></div>
+		</aside>
+		<section class="col-lg-8 col-xl-9 map-panel"><div class="map-label"><i class="bi bi-geo-alt-fill text-primary me-1"></i>Mapa de rutas</div><div id="map" aria-label="Mapa interactivo de Colombia"></div></section>
+	</div></main>
+	<script>
+		const STORAGE_KEY = 'itineraries_v1';
+		const airports = { BOG: { name: 'Bogotá - El Dorado (BOG)', lat: 4.7016, lon: -74.1469 }, MDE: { name: 'Medellín - José María Córdova (MDE)', lat: 6.2297, lon: -75.4078 }, CTG: { name: 'Cartagena - Rafael Núñez (CTG)', lat: 10.4424, lon: -75.5134 }, CLO: { name: 'Cali - Alfonso Bonilla Aragón (CLO)', lat: 3.5439, lon: -76.3811 }, BAQ: { name: 'Barranquilla - Ernesto Cortissoz (BAQ)', lat: 10.8894, lon: -74.7808 }, SMR: { name: 'Santa Marta - Simón Bolívar (SMR)', lat: 11.1192, lon: -74.2308 }, PEI: { name: 'Pereira - Matecaña (PEI)', lat: 4.8125, lon: -75.7397 }, BGA: { name: 'Bucaramanga - Palonegro (BGA)', lat: 7.1264, lon: -73.1844 }, CUC: { name: 'Cúcuta - Camilo Daza (CUC)', lat: 7.9275, lon: -72.5111 }, AXM: { name: 'Armenia - El Edén (AXM)', lat: 4.4525, lon: -75.7664 } };
+		const colors = ['#1769e0', '#e05a33', '#159a72', '#8b5cf6', '#d28b16']; let itineraries = [];
+		const mapLayout = { geo: { scope: 'south america', projection: { type: 'mercator', scale: 5.2 }, center: { lat: 4.8, lon: -74.2 }, showland: true, landcolor: '#dff2eb', showocean: true, oceancolor: '#dceff8', showcountries: true, countrycolor: '#9bb9b3', coastlinecolor: '#8eaaa4', showlakes: true, lakecolor: '#dceff8' }, margin: { t: 10, r: 10, b: 10, l: 10 }, paper_bgcolor: 'rgba(0,0,0,0)', showlegend: false };
+		function makeArc(a, b) { const lat = [], lon = []; for (let i = 0; i <= 80; i++) { const t = i / 80; lat.push(a.lat * (1 - t) + b.lat * t + Math.sin(Math.PI * t) * .45); lon.push(a.lon * (1 - t) + b.lon * t); } return { lat, lon }; }
+		function renderMap(selectedId) { const traces = [{ type: 'scattergeo', mode: 'markers', lon: [-74.2], lat: [4.8], marker: { size: 1, opacity: 0 }, hoverinfo: 'skip' }]; itineraries.forEach((it, index) => { const from = airports[it.dep], to = airports[it.arr], color = colors[index % colors.length], arc = makeArc(from, to); traces.push({ type: 'scattergeo', mode: 'lines', lon: arc.lon, lat: arc.lat, line: { color, width: 2 + it.intensity / 3 }, hovertemplate: `${from.name} → ${to.name}<br>Intensidad: ${it.intensity} h<extra></extra>` }); traces.push({ type: 'scattergeo', mode: 'markers+text', lon: [from.lon, to.lon], lat: [from.lat, to.lat], text: [it.dep, it.arr], textposition: ['bottom center', 'top center'], marker: { size: [10, 12], color, line: { color: '#fff', width: 2 } }, hovertemplate: [`Salida: ${from.name}<extra></extra>`, `Llegada: ${to.name}<extra></extra>`] }); }); Plotly.react('map', traces, mapLayout, { responsive: true, displayModeBar: false, scrollZoom: true }); if (selectedId) centerOnIt(selectedId); }
+		function centerOnIt(id) { const it = itineraries.find(item => item.id === id); if (!it) return; const from = airports[it.dep], to = airports[it.arr]; Plotly.relayout('map', { 'geo.center': { lat: (from.lat + to.lat) / 2, lon: (from.lon + to.lon) / 2 }, 'geo.projection.scale': 6.2 }); }
+		function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(itineraries)); }
+		function updateList() { const list = document.getElementById('itinerariesList'); list.innerHTML = ''; document.getElementById('countBadge').textContent = itineraries.length; if (!itineraries.length) { list.innerHTML = '<p class="muted small">Aún no tienes rutas. Crea la primera con el formulario.</p>'; return; } itineraries.slice().reverse().forEach((it, reverseIndex) => { const color = colors[(itineraries.length - 1 - reverseIndex) % colors.length], item = document.createElement('div'); item.className = 'itinerary-item'; item.innerHTML = `<div class="d-flex justify-content-between gap-2"><div><strong><span class="color-dot" style="background:${color}"></span>${it.dep} → ${it.arr}</strong><div class="muted small mt-1">${airports[it.dep].name} → ${airports[it.arr].name}</div><div class="small mt-2"><i class="bi bi-clock me-1"></i>${it.intensity} horas de intensidad</div></div><button class="remove btn btn-sm btn-outline-danger" title="Eliminar ruta"><i class="bi bi-trash"></i></button></div>`; item.addEventListener('click', event => { if (!event.target.closest('.remove')) renderMap(it.id); }); item.querySelector('.remove').addEventListener('click', () => { itineraries = itineraries.filter(route => route.id !== it.id); save(); updateList(); renderMap(); }); list.appendChild(item); }); }
+		function fillSelects() { ['departure', 'arrival'].forEach((id, index) => { const select = document.getElementById(id); Object.entries(airports).forEach(([code, airport]) => select.add(new Option(airport.name, code))); select.value = index === 0 ? 'MDE' : 'CTG'; }); }
+		document.getElementById('intensity').addEventListener('input', event => document.getElementById('intensityVal').textContent = `${event.target.value} h`);
+		document.getElementById('itineraryForm').addEventListener('submit', event => { event.preventDefault(); const dep = document.getElementById('departure').value, arr = document.getElementById('arrival').value, intensity = Number(document.getElementById('intensity').value); if (dep === arr) { alert('Selecciona aeropuertos diferentes.'); return; } itineraries.push({ id: `${Date.now()}-${Math.random().toString(16).slice(2)}`, dep, arr, intensity }); save(); updateList(); renderMap(itineraries[itineraries.length - 1].id); });
+		document.getElementById('clearForm').addEventListener('click', () => { document.getElementById('itineraryForm').reset(); document.getElementById('intensityVal').textContent = '4 h'; });
+		document.getElementById('clearAll').addEventListener('click', () => { if (itineraries.length && confirm('¿Eliminar todos los itinerarios?')) { itineraries = []; save(); updateList(); renderMap(); } });
+		function init() { fillSelects(); try { itineraries = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch (error) { itineraries = []; } updateList(); renderMap(); } init();
+	</script>
+</body>
+</html>
